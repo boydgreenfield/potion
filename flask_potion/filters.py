@@ -149,6 +149,11 @@ class ContainsFilter(BaseFilter):
     def _schema(self):
         return self.field.container.response
 
+    def _convert(self, value):
+        if hasattr(self.field, "container"):
+            return self.field.container.convert(value)
+        return self.field.convert(value)
+
     def op(self, a, b):
         return hasattr(a, '__iter__') and b in a
 
