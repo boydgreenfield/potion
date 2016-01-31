@@ -3,10 +3,11 @@ from flask_sqlalchemy import Pagination as SAPagination, get_state
 from sqlalchemy import String, or_, and_
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import class_mapper, aliased
+from sqlalchemy.orm import class_mapper, aliased, joinedload
 from sqlalchemy.orm.attributes import ScalarObjectAttributeImpl
 from sqlalchemy.orm.collections import InstrumentedList
 from sqlalchemy.orm.exc import NoResultFound
+from werkzeug.utils import cached_property
 
 from flask_potion import fields
 from flask_potion.contrib.alchemy.filters import FILTER_NAMES, FILTERS_BY_TYPE, SQLAlchemyBaseFilter
@@ -16,6 +17,7 @@ from flask_potion.manager import RelationalManager
 from flask_potion.signals import before_add_to_relation, after_add_to_relation, before_remove_from_relation, \
     after_remove_from_relation, before_create, after_create, before_update, after_update, before_delete, after_delete
 from flask_potion.utils import get_value
+
 
 
 class SQLAlchemyManager(RelationalManager):
@@ -129,8 +131,29 @@ class SQLAlchemyManager(RelationalManager):
     def _get_session():
         return get_state(current_app).db.session
 
+    @cached_property
+    def _joinedloads(self):
+        joinedloads = []
+        for key, field in self.resource.schema.fields.items():
+            if isinstance(field, fields.Array):
+                field = field.container
+
+            if (isinstance(field, fields.ToOne) or
+                    isinstance(field, fields.ToMany) or
+                    isinstance(field, fields.Inline)):
+
+                if field.attribute is not None:
+                    joinedloads.append(joinedload(field.attribute))
+                elif field.target_reference is not None:
+                    joinedloads.append(joinedload(field.target_reference.value))
+
+        return joinedloads
+
     def _query(self):
-        return self.model.query
+        query = self.model.query
+        if self.resource.meta.sqlalchemy_eager_load and self._joinedloads:
+            query = query.options(self._joinedloads)
+        return query
 
     def _query_filter(self, query, expression):
         return query.filter(expression)

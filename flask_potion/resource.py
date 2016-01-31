@@ -317,6 +317,7 @@ class ModelResource(six.with_metaclass(ModelResourceMeta, Resource)):
         }
         postgres_text_search_fields = ()
         postgres_full_text_index = None  # $fulltext
+        sqlalchemy_eager_load = False
         cache = False
         key_converters = (
             RefKey(),
